@@ -703,6 +703,7 @@ class RelatedSaveCallsTest(TestCase):
         self.assertEqual(dog_bones[0], bone1)
         self.assertEqual(dog_bones[1], bone2)
 
+<<<<<<< HEAD
 
 class CorrectUriRelationsTestCase(TestCase):
     """
@@ -746,3 +747,5 @@ class CorrectUriRelationsTestCase(TestCase):
 
         self.assertEqual(str(cm.exception), "An incorrect URL was provided '/v1/notes/2/' for the 'UserResource' resource.")
         self.assertEqual(Note.objects.count(), 2)
+=======
+>>>>>>> Added test case to ensure existing reverse 1-to-many relations don't get erased.

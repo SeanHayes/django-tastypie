@@ -211,4 +211,3 @@ class ForumResource(ModelResource):
         queryset = Forum.objects.all()
         authorization = Authorization()
         always_return_data = True
-
