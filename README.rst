@@ -4,7 +4,7 @@ django-tastypie
 
 Creating delicious APIs for Django apps since 2010.
 
-Currently in beta (v0.9.14) but being used actively in production on several
+Currently in beta (v0.11.1-dev) but being used actively in production on several
 sites.
 
 
@@ -14,13 +14,9 @@ Requirements
 Core
 ----
 
-* Python 2.6+
-* Django 1.3+
-* mimeparse 0.1.3+ (http://code.google.com/p/mimeparse/)
-
-  * Older versions will work, but their behavior on JSON/JSONP is a touch wonky.
-
-* dateutil (http://labix.org/python-dateutil) >= 1.5, < 2.0
+* Python 2.6+ or Python 3.3+
+* Django 1.5+
+* dateutil (http://labix.org/python-dateutil) >= 2.1
 
 Format Support
 --------------
@@ -32,7 +28,7 @@ Format Support
 Optional
 --------
 
-* HTTP Digest authentication: python_digest (https://bitbucket.org/akoha/python-digest/)
+* HTTP Digest authentication: python3-digest (https://bitbucket.org/akoha/python-digest/)
 
 
 What's It Look Like?
@@ -102,7 +98,7 @@ Reference Material
 * http://jacobian.org/writing/rest-worst-practices/
 
 
-Security 
+Security
 ========
 
 Tastypie is committed to providing a flexible and secure API, and was designed
