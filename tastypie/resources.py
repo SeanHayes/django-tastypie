@@ -2233,6 +2233,9 @@ class BaseModelResource(Resource):
     def create_identifier(self, obj):
         return u"%s.%s.%s" % (obj._meta.app_label, obj._meta.module_name, obj.pk)
 
+    def get_save_options(self, bundle):
+        return {}
+
     def save(self, bundle, skip_errors=False):
         self.is_valid(bundle)
 
@@ -2249,7 +2252,7 @@ class BaseModelResource(Resource):
         self.save_related(bundle)
 
         # Save the main object.
-        bundle.obj.save()
+        bundle.obj.save(**self.get_save_options(bundle))
         bundle.objects_saved.add(self.create_identifier(bundle.obj))
 
         # Now pick up the M2M bits.
