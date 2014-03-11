@@ -569,7 +569,7 @@ class RelatedField(ApiField):
             )
             return related_resource.full_dehydrate(bundle)
 
-    def resource_from_uri(self, fk_resource, uri, request=None, related_bundle=None, related_obj=None, related_name=None):
+    def resource_from_uri(self, fk_resource, uri, request=None, related_obj=None, related_name=None, related_bundle=None):
         """
         Given a URI is provided, the related resource is attempted to be
         loaded based on the identifiers in the URI.
@@ -584,7 +584,7 @@ class RelatedField(ApiField):
         except ObjectDoesNotExist:
             raise ApiFieldError("Could not find the provided object via resource URI '%s'." % uri)
 
-    def resource_from_data(self, fk_resource, data, request=None, related_bundle=None, related_obj=None, related_name=None):
+    def resource_from_data(self, fk_resource, data, request=None, related_obj=None, related_name=None, related_bundle=None):
         """
         Given a dictionary-like structure is provided, a fresh related
         resource is created using that data.
@@ -626,7 +626,7 @@ class RelatedField(ApiField):
         fk_resource.is_valid(fk_bundle)
         return fk_bundle
 
-    def resource_from_pk(self, fk_resource, obj, request=None, related_bundle=None, related_obj=None, related_name=None):
+    def resource_from_pk(self, fk_resource, obj, request=None, related_obj=None, related_name=None, related_bundle=None):
         """
         Given an object with a ``pk`` attribute, the related resource
         is attempted to be loaded via that PK.
@@ -637,7 +637,7 @@ class RelatedField(ApiField):
         )
         return fk_resource.full_dehydrate(bundle)
 
-    def build_related_resource(self, value, request=None, related_bundle=None, related_obj=None, related_name=None):
+    def build_related_resource(self, value, request=None, related_obj=None, related_name=None, related_bundle=None):
         """
         Returns a bundle of data built by the related resource, usually via
         ``hydrate`` with the data provided.
