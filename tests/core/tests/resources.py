@@ -566,6 +566,7 @@ class ResourceTestCase(TestCase):
         basic = BasicResource()
         schema = self.adjust_schema(basic.build_schema())
         self.assertEqual(schema, {
+            'allowed_attribute_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             'allowed_detail_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             'allowed_list_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             'default_format': 'application/json',
@@ -619,7 +620,9 @@ class ResourceTestCase(TestCase):
                 'name': 1,
                 'date_joined': ['gt', 'gte']
             },
+            'allowed_attribute_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             'allowed_detail_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
+            'allowed_list_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             'ordering': ['date_joined', 'name'],
             'fields': {
                 'view_count': {
@@ -661,7 +664,6 @@ class ResourceTestCase(TestCase):
             },
             'default_format': 'application/json',
             'default_limit': 20,
-            'allowed_list_http_methods': ['get', 'post', 'put', 'delete', 'patch']
         })
 
     def test_subclassing(self):
@@ -1476,8 +1478,8 @@ class ModelResourceTestCase(TestCase):
         # The common case, where the ``Api`` specifies the name.
         resource = NoteResource(api_name='v1')
         patterns = resource.urls
-        self.assertEqual(len(patterns), 4)
-        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_detail'])
+        self.assertEqual(len(patterns), 5)
+        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_detail', 'api_dispatch_attribute'])
         self.assertEqual(reverse('api_dispatch_list', kwargs={
             'api_name': 'v1',
             'resource_name': 'notes',
@@ -1487,12 +1489,18 @@ class ModelResourceTestCase(TestCase):
             'resource_name': 'notes',
             'pk': 1,
         }), '/api/v1/notes/1/')
+        self.assertEqual(reverse('api_dispatch_attribute', kwargs={
+            'api_name': 'v1',
+            'resource_name': 'notes',
+            'pk': 1,
+            'attribute': 'title',
+        }), '/api/v1/notes/1/title/')
 
         # Start over.
         resource = NoteResource()
         patterns = resource.urls
-        self.assertEqual(len(patterns), 4)
-        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_detail'])
+        self.assertEqual(len(patterns), 5)
+        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_detail', 'api_dispatch_attribute'])
         self.assertEqual(reverse('api_dispatch_list', urlconf='core.tests.manual_urls', kwargs={
             'resource_name': 'notes',
         }), '/notes/')
@@ -1500,6 +1508,11 @@ class ModelResourceTestCase(TestCase):
             'resource_name': 'notes',
             'pk': 1,
         }), '/notes/1/')
+        self.assertEqual(reverse('api_dispatch_attribute', urlconf='core.tests.manual_urls', kwargs={
+            'resource_name': 'notes',
+            'pk': 1,
+            'attribute': 'title',
+        }), '/notes/1/title/')
 
     def test_get_via_uri(self):
         resource = NoteResource(api_name='v1')
@@ -1590,7 +1603,9 @@ class ModelResourceTestCase(TestCase):
                 'subjects': 2,
                 'author': 1
             },
+            'allowed_attribute_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             'allowed_detail_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
+            'allowed_list_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             'fields': {
                 'author': {
                     'related_type': 'to_one',
@@ -1669,7 +1684,6 @@ class ModelResourceTestCase(TestCase):
             },
             'default_format': 'application/json',
             'default_limit': 20,
-            'allowed_list_http_methods': ['get', 'post', 'put', 'delete', 'patch']
         })
 
     def test_build_filters(self):
@@ -3024,8 +3038,9 @@ class ModelResourceTestCase(TestCase):
         resp = resource.get_schema(request)
         self.assertEqual(resp.status_code, 200)
         schema = {
-            "allowed_detail_http_methods": ["get", "post", "put", "delete", "patch"],
-            "allowed_list_http_methods": ["get", "post", "put", "delete", "patch"],
+            'allowed_attribute_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
+            'allowed_detail_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
+            'allowed_list_http_methods': ['get', 'post', 'put', 'delete', 'patch'],
             "default_format": "application/json",
             "default_limit": 20,
             "fields": {

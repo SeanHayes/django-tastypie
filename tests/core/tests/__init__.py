@@ -2,6 +2,7 @@ import warnings
 warnings.simplefilter('ignore', Warning)
 
 from core.tests.api import *
+from core.tests.attribute_views import *
 from core.tests.authentication import *
 from core.tests.authorization import *
 from core.tests.cache import *
