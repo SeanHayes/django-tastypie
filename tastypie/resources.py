@@ -1218,6 +1218,19 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
 
         return response_class(content=serialized, content_type=build_content_type(desired_format))
 
+    def return_list_data(self, request, bundles, kwargs, response_class=HttpResponse, **response_kwargs):
+        to_be_serialized = {}
+        to_be_serialized[self._meta.collection_name] = [self.full_dehydrate(bundle, for_list=True) for bundle in bundles]
+        to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
+        
+        return self.create_response(request, to_be_serialized, response_class=response_class, **response_kwargs)
+
+    def return_detail_data(self, request, bundle, kwargs, response_class=HttpResponse, **response_kwargs):
+        bundle = self.full_dehydrate(bundle)
+        bundle = self.alter_detail_data_to_serialize(request, bundle)
+        
+        return self.create_response(request, bundle, response_class=response_class, **response_kwargs)
+
     def is_valid(self, bundle):
         """
         Handles checking if the data provided by the user is valid.
@@ -1276,6 +1289,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             bundle = self.build_bundle(obj=obj, request=request)
             bundles.append(self.full_dehydrate(bundle, for_list=True))
 
+        # NOTE: can't use return_list_data because of the pagination
         to_be_serialized[self._meta.collection_name] = bundles
         to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
         return self.create_response(request, to_be_serialized)
@@ -1299,9 +1313,8 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             return http.HttpMultipleChoices("More than one resource is found at this URI.")
 
         bundle = self.build_bundle(obj=obj, request=request)
-        bundle = self.full_dehydrate(bundle)
-        bundle = self.alter_detail_data_to_serialize(request, bundle)
-        return self.create_response(request, bundle)
+        
+        return self.return_detail_data(request, bundle, kwargs)
 
     def post_list(self, request, **kwargs):
         """
@@ -1323,9 +1336,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         if not self._meta.always_return_data:
             return http.HttpCreated(location=location)
         else:
-            updated_bundle = self.full_dehydrate(updated_bundle)
-            updated_bundle = self.alter_detail_data_to_serialize(request, updated_bundle)
-            return self.create_response(request, updated_bundle, response_class=http.HttpCreated, location=location)
+            return self.return_detail_data(request, updated_bundle, kwargs, http.HttpCreated, location=location)
 
     def post_detail(self, request, **kwargs):
         """
@@ -1376,10 +1387,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         if not self._meta.always_return_data:
             return http.HttpNoContent()
         else:
-            to_be_serialized = {}
-            to_be_serialized[self._meta.collection_name] = [self.full_dehydrate(bundle, for_list=True) for bundle in bundles_seen]
-            to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
-            return self.create_response(request, to_be_serialized)
+            return self.return_list_data(request, bundles_seen, kwargs)
 
     def put_detail(self, request, **kwargs):
         """
@@ -1410,9 +1418,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             if not self._meta.always_return_data:
                 return http.HttpNoContent()
             else:
-                updated_bundle = self.full_dehydrate(updated_bundle)
-                updated_bundle = self.alter_detail_data_to_serialize(request, updated_bundle)
-                return self.create_response(request, updated_bundle)
+                return self.return_detail_data(request, updated_bundle, kwargs)
         except (NotFound, MultipleObjectsReturned):
             updated_bundle = self.obj_create(bundle=bundle, **self.remove_api_resource_names(kwargs))
             location = self.get_resource_uri(updated_bundle)
@@ -1420,9 +1426,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             if not self._meta.always_return_data:
                 return http.HttpCreated(location=location)
             else:
-                updated_bundle = self.full_dehydrate(updated_bundle)
-                updated_bundle = self.alter_detail_data_to_serialize(request, updated_bundle)
-                return self.create_response(request, updated_bundle, response_class=http.HttpCreated, location=location)
+                return self.return_detail_data(request, updated_bundle, kwargs, http.HttpCreated, location=location)
 
     def delete_list(self, request, **kwargs):
         """
@@ -1564,10 +1568,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         if not self._meta.always_return_data:
             return http.HttpAccepted()
         else:
-            to_be_serialized = {}
-            to_be_serialized['objects'] = [self.full_dehydrate(bundle, for_list=True) for bundle in bundles_seen]
-            to_be_serialized = self.alter_list_data_to_serialize(request, to_be_serialized)
-            return self.create_response(request, to_be_serialized, response_class=http.HttpAccepted)
+            return self.return_list_data(request, bundles_seen, kwargs, http.HttpAccepted)
 
     def patch_detail(self, request, **kwargs):
         """
@@ -1605,9 +1606,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         if not self._meta.always_return_data:
             return http.HttpAccepted()
         else:
-            bundle = self.full_dehydrate(bundle)
-            bundle = self.alter_detail_data_to_serialize(request, bundle)
-            return self.create_response(request, bundle, response_class=http.HttpAccepted)
+            return self.return_detail_data(request, bundle, kwargs, http.HttpAccepted)
 
     def update_in_place(self, request, original_bundle, new_data):
         """
