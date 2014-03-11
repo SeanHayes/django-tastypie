@@ -8,6 +8,7 @@ from tastypie.exceptions import NotRegistered, BadRequest
 from tastypie.resources import Resource, ModelResource
 from tastypie.serializers import Serializer
 from core.models import Note
+from core.tests.utils import adjust_schema
 
 
 class NoteResource(ModelResource):
@@ -149,11 +150,20 @@ class ApiTestCase(TestCase):
         
         content = json.loads(resp.content.decode('utf-8'))
         
+        content['notes']['schema'] = adjust_schema(content['notes']['schema'])
+        content['users']['schema'] = adjust_schema(content['users']['schema'])
+        
+        dummy_request = HttpRequest()
+        dummy_request.method = 'GET'
+        
+        notes_schema = adjust_schema(json.loads(note_resource.get_schema(dummy_request).content))
+        user_schema  = adjust_schema(json.loads(user_resource.get_schema(dummy_request).content))
+        
         self.assertEqual(content['notes']['list_endpoint'], '/api/v1/notes/')
-        self.assertEqual(content['notes']['schema'], note_resource.build_schema())
+        self.assertEqual(content['notes']['schema'], notes_schema)
         
         self.assertEqual(content['users']['list_endpoint'], '/api/v1/users/')
-        self.assertEqual(content['users']['schema'], user_resource.build_schema())
+        self.assertEqual(content['users']['schema'], user_schema)
 
     def test_top_level_jsonp(self):
         api = Api()
