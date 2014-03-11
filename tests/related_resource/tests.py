@@ -773,7 +773,7 @@ class RelatedSaveCallsTest(TestCaseWithFixture):
         
         request.set_body(json.dumps(body_dict))
         
-        num_queries = 17 if old_saving_algorithm else 12
+        num_queries = 19 if old_saving_algorithm else 14
 
         with self.assertNumQueries(num_queries):
             resp = resource.wrap_view('dispatch_detail')(request, pk=dog.pk)

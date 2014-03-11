@@ -559,11 +559,7 @@ class RelatedField(ApiField):
             return related_resource.get_resource_uri(bundle)
         else:
             # ZOMG extra data and big payloads.
-<<<<<<< HEAD
             new_bundle = related_resource.build_bundle(
-=======
-            bundle = related_resource.build_bundle(
->>>>>>> Removed data shared on Field objects, changed code to reuse related resources.
                 obj=bundle.obj,
                 request=bundle.request,
                 objects_saved=bundle.objects_saved,
@@ -746,15 +742,9 @@ class ToOneField(RelatedField):
             
             return None        
 
-<<<<<<< HEAD
-        self.fk_resource = self.get_related_resource(foreign_obj)
-        fk_bundle = Bundle(obj=foreign_obj, request=bundle.request, related_name=self.related_name, related_obj=bundle.obj)
-        return self.dehydrate_related(fk_bundle, self.fk_resource, for_list=for_list)
-=======
         fk_resource = self.get_related_resource(foreign_obj)
-        fk_bundle = Bundle(obj=foreign_obj, request=bundle.request)
+        fk_bundle = Bundle(obj=foreign_obj, request=bundle.request, related_name=self.related_name, related_obj=bundle.obj)
         return self.dehydrate_related(fk_bundle, fk_resource, for_list=for_list)
->>>>>>> Removed data shared on Field objects, changed code to reuse related resources.
 
     def hydrate(self, bundle):
         value = super(ToOneField, self).hydrate(bundle)
@@ -839,7 +829,6 @@ class ToManyField(RelatedField):
 
         # TODO: Also model-specific and leaky. Relies on there being a
         #       ``Manager`` there.
-<<<<<<< HEAD
         m2m_dehydrated = [
             self.dehydrate_related(
                 Bundle(obj=m2m, request=bundle.request),
@@ -848,12 +837,6 @@ class ToManyField(RelatedField):
             )
             for m2m in the_m2ms.all()
         ]
-=======
-        for m2m in the_m2ms.all():
-            m2m_resource = self.get_related_resource(m2m)
-            m2m_bundle = Bundle(obj=m2m, request=bundle.request)
-            m2m_dehydrated.append(self.dehydrate_related(m2m_bundle, m2m_resource, for_list=for_list))
->>>>>>> Removed data shared on Field objects, changed code to reuse related resources.
 
         return m2m_dehydrated
 
