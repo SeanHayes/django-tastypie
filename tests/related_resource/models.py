@@ -116,7 +116,6 @@ class Post(models.Model):
     name = models.CharField(max_length=200)
     label = models.ManyToManyField(Label, null=True)
 
-
 class Job(models.Model):
     name = models.CharField(max_length=200)
 
