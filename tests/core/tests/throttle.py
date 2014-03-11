@@ -127,6 +127,7 @@ class CacheDBThrottleTestCase(TestCase):
         self.assertEqual(ApiAccess.objects.filter(identifier='daniel').count(), 4)
 
         # Test the timeframe.
+        #FIXME: it would be better to mock whatever fucntion is used to check the elapsed time
         time.sleep(3)
         self.assertEqual(throttle_1.should_be_throttled('daniel'), False)
         self.assertEqual(len(cache.get('daniel_accesses')), 0)
