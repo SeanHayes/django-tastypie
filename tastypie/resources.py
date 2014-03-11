@@ -780,10 +780,9 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         except NoReverseMatch:
             return ''
 
-    def get_via_uri(self, uri, request=None):
+    def resolve(self, uri, request=None):
         """
-        This pulls apart the salient bits of the URI and populates the
-        resource via a ``obj_get``.
+        This pulls apart the salient bits of the URI.
 
         Optionally accepts a ``request``.
 
@@ -797,9 +796,21 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             chomped_uri = chomped_uri[len(prefix)-1:]
 
         try:
-            view, args, kwargs = resolve(chomped_uri)
+            return resolve(chomped_uri)
         except Resolver404:
             raise NotFound("The URL provided '%s' was not a link to a valid resource." % uri)
+
+    def get_via_uri(self, uri, request=None):
+        """
+        This pulls apart the salient bits of the URI and populates the
+        resource via a ``obj_get``.
+
+        Optionally accepts a ``request``.
+
+        If you need custom behavior based on other portions of the URI,
+        simply override this method.
+        """
+        view, args, kwargs = self.resolve(uri, request=request)
 
         bundle = self.build_bundle(request=request)
         return self.obj_get(bundle=bundle, **self.remove_api_resource_names(kwargs))
