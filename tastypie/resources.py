@@ -9,7 +9,7 @@ import warnings
 from django.conf import settings
 from django.conf.urls import patterns, url
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, ValidationError
-from django.core.urlresolvers import NoReverseMatch, reverse, resolve, Resolver404, get_script_prefix
+from django.core.urlresolvers import NoReverseMatch, reverse, Resolver404, get_script_prefix
 from django.core.signals import got_request_exception
 from django.db import transaction
 from django.db.models import Q
@@ -805,10 +805,9 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         except NoReverseMatch:
             return ''
 
-    def get_via_uri(self, uri, request=None):
+    def resolve(self, uri, request=None):
         """
-        This pulls apart the salient bits of the URI and populates the
-        resource via a ``obj_get``.
+        This pulls apart the salient bits of the URI.
 
         Optionally accepts a ``request``.
 
@@ -833,12 +832,23 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
                 result = url_resolver.resolve(chomped_uri)
 
                 if result is not None:
-                    view, args, kwargs = result
-                    break
+                    return result
             else:
                 raise Resolver404("URI not found in 'self.urls'.")
         except Resolver404:
             raise NotFound("The URL provided '%s' was not a link to a valid resource." % uri)
+
+    def get_via_uri(self, uri, request=None):
+        """
+        This pulls apart the salient bits of the URI and populates the
+        resource via a ``obj_get``.
+
+        Optionally accepts a ``request``.
+
+        If you need custom behavior based on other portions of the URI,
+        simply override this method.
+        """
+        view, args, kwargs = self.resolve(uri, request=request)
 
         bundle = self.build_bundle(request=request)
         return self.obj_get(bundle=bundle, **self.remove_api_resource_names(kwargs))
