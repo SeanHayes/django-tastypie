@@ -2394,7 +2394,8 @@ class BaseModelResource(Resource):
             # In addition to models.ManyToManyField, ToManyField
             # is used for models.ForeignKey reverse relations, in which case calling
             # add() saves each related obj a 2nd time.
-            # If we can verify that this is a one-to-many relation, skip re-adding it.
+            # If we can verify that this is a one-to-many relation, skip calling
+            # add() on the related manager.
             if not related_to_one:
                 related_mngr.add(*related_objs)
 
