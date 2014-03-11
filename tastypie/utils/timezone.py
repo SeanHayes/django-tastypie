@@ -12,7 +12,10 @@ try:
         return value
 
     def make_naive(value):
-        if getattr(settings, "USE_TZ", False) and timezone.is_aware(value):
+        USE_TZ = getattr(settings, "USE_TZ", False)
+        TASTYPIE_MAKE_TZ_NAIVE = getattr(settings, "TASTYPIE_MAKE_TZ_NAIVE", False)
+        
+        if USE_TZ and TASTYPIE_MAKE_TZ_NAIVE and timezone.is_aware(value):
             default_tz = timezone.get_default_timezone()
             value = timezone.make_naive(value, default_tz)
         return value
