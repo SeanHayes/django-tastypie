@@ -7,12 +7,14 @@ import warnings
 from django.conf import settings
 from django.conf.urls import patterns, url
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, ValidationError
+from django.core.files.uploadhandler import StopFutureHandlers
 from django.core.urlresolvers import NoReverseMatch, reverse, resolve, Resolver404, get_script_prefix
 from django.core.signals import got_request_exception
 from django.db import transaction
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.sql.constants import QUERY_TERMS
 from django.http import HttpResponse, HttpResponseNotFound, Http404
+from django.http.multipartparser import parse_header
 from django.utils.cache import patch_cache_control, patch_vary_headers
 from django.utils import six
 
@@ -62,6 +64,7 @@ class ResourceOptions(object):
     allowed_methods = ['get', 'post', 'put', 'delete', 'patch']
     list_allowed_methods = None
     detail_allowed_methods = None
+    attribute_allowed_methods = None
     limit = getattr(settings, 'API_LIMIT_PER_PAGE', 20)
     max_limit = 1000
     api_name = None
@@ -97,6 +100,9 @@ class ResourceOptions(object):
 
         if overrides.get('detail_allowed_methods', None) is None:
             overrides['detail_allowed_methods'] = allowed_methods
+
+        if overrides.get('attribute_allowed_methods', None) is None:
+            overrides['attribute_allowed_methods'] = allowed_methods
 
         if six.PY3:
             return object.__new__(type('ResourceOptions', (cls,), overrides))
@@ -297,6 +303,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             url(r"^(?P<resource_name>%s)%s$" % (self._meta.resource_name, trailing_slash()), self.wrap_view('dispatch_list'), name="api_dispatch_list"),
             url(r"^(?P<resource_name>%s)/schema%s$" % (self._meta.resource_name, trailing_slash()), self.wrap_view('get_schema'), name="api_get_schema"),
             url(r"^(?P<resource_name>%s)/set/(?P<%s_list>.*?)%s$" % (self._meta.resource_name, self._meta.detail_uri_name, trailing_slash()), self.wrap_view('get_multiple'), name="api_get_multiple"),
+            url(r"^(?P<resource_name>%s)/(?P<%s>.*?)/(?P<attribute>.*?)%s$" % (self._meta.resource_name, self._meta.detail_uri_name, trailing_slash()), self.wrap_view('dispatch_attribute'), name="api_dispatch_attribute"),
             url(r"^(?P<resource_name>%s)/(?P<%s>.*?)%s$" % (self._meta.resource_name, self._meta.detail_uri_name, trailing_slash()), self.wrap_view('dispatch_detail'), name="api_dispatch_detail"),
         ]
 
@@ -433,6 +440,15 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         Relies on ``Resource.dispatch`` for the heavy-lifting.
         """
         return self.dispatch('detail', request, **kwargs)
+
+    def dispatch_attribute(self, request, **kwargs):
+        """
+        A view for handling the various HTTP methods (GET/POST/PUT/DELETE) on
+        an attribute for a single resource. Useful for file uploads.
+
+        Relies on ``Resource.dispatch`` for the heavy-lifting.
+        """
+        return self.dispatch('attribute', request, **kwargs)
 
     def dispatch(self, request_type, request, **kwargs):
         """
@@ -953,6 +969,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             'default_format': self._meta.default_format,
             'allowed_list_http_methods': self._meta.list_allowed_methods,
             'allowed_detail_http_methods': self._meta.detail_allowed_methods,
+            'allowed_attribute_http_methods': self._meta.attribute_allowed_methods,
             'default_limit': self._meta.limit,
         }
 
@@ -1008,6 +1025,64 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
 
         # Use a list plus a ``.join()`` because it's faster than concatenation.
         return "%s:%s:%s:%s" % (self._meta.api_name, self._meta.resource_name, ':'.join(args), ':'.join(sorted(smooshed)))
+
+    def get_file_from_request_body(self, request, field_name):
+        disposition = parse_header(request.META.get("HTTP_CONTENT_DISPOSITION", ''))
+        
+        file_name = "unnamed-file"
+        content_type = request.META.get("CONTENT_TYPE", "application/octet-stream")
+        charset = request.encoding
+        
+        try:
+            disposition_data = disposition[1]
+        except IndexError:
+            pass
+        else:
+            try:
+                file_name = disposition_data['filename']
+            except KeyError:
+                pass
+        
+        upload_handlers = request.upload_handlers
+        
+        try:
+            content_length = int(request.META.get('HTTP_CONTENT_LENGTH', request.META.get('CONTENT_LENGTH', 0)))
+        except (ValueError, TypeError):
+            content_length = 0
+
+        # from http://stackoverflow.com/a/5761473/241955
+        counters = [0]*len(upload_handlers)
+        
+        for handler in upload_handlers:
+            result = handler.handle_raw_input("",request.META,content_length,"","")
+
+        for handler in upload_handlers:
+
+            try:
+                handler.new_file(field_name, file_name, 
+                                 content_type, content_length, charset)
+            except StopFutureHandlers:
+                break
+
+        for i, handler in enumerate(upload_handlers):
+            while True:
+                chunk = request.read(handler.chunk_size)
+                
+                if chunk:
+
+                    handler.receive_data_chunk(chunk, counters[i])
+                    counters[i] += len(chunk)
+                else:
+                    # no chunk
+                    break
+        
+        files = []
+        for i, handler in enumerate(upload_handlers):
+            if hasattr(handler, 'file'):
+                file_obj = handler.file_complete(counters[i])
+                files.append(file_obj)
+        
+        return files[0]
 
     # Data access methods.
 
@@ -1423,6 +1498,46 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
                 updated_bundle = self.full_dehydrate(updated_bundle)
                 updated_bundle = self.alter_detail_data_to_serialize(request, updated_bundle)
                 return self.create_response(request, updated_bundle, response_class=http.HttpCreated, location=location)
+
+    def put_attribute(self, request, **kwargs):
+        """
+        Updates an attribute on an existing resource. Only supports file uploads.
+        
+        Uploaded file can either be sent directly in the request body, or as an
+        attribute called "file" in a multipart/form-data request.
+        """
+        attribute = kwargs.pop('attribute')
+        
+        attribute_field = self.fields.get(attribute, None)
+        
+        if not attribute_field or not isinstance(attribute_field, fields.FileField):
+            return http.HttpNotFound()
+        
+        basic_bundle = self.build_bundle(request=request)
+        
+        try:
+            obj = self.cached_obj_get(bundle=basic_bundle, **self.remove_api_resource_names(kwargs))
+        except ObjectDoesNotExist:
+            return http.HttpNotFound()
+        except MultipleObjectsReturned:
+            return http.HttpMultipleChoices("More than one resource is found at this URI.")
+        
+        if request.META.get("CONTENT_TYPE", '').startswith('multipart'):
+            file_obj = request.FILES.get('file')
+            
+            if file_obj is None:
+                raise BadRequest('Please include a multipart file for the "file" key.')
+        else:
+            file_obj = self.get_file_from_request_body(request, attribute)
+        
+        bundle = self.build_bundle(obj=obj, request=request, data={attribute: file_obj})
+        
+        self.obj_update(bundle)
+        
+        bundle = self.build_bundle(obj=obj, request=request)
+        bundle = self.full_dehydrate(bundle)
+        bundle = self.alter_detail_data_to_serialize(request, bundle)
+        return self.create_response(request, bundle)
 
     def delete_list(self, request, **kwargs):
         """

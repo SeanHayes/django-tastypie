@@ -1479,7 +1479,7 @@ class ModelResourceTestCase(TestCase):
         resource = NoteResource(api_name='v1')
         patterns = resource.urls
         self.assertEqual(len(patterns), 5)
-        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_detail', 'api_dispatch_attribute'])
+        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_attribute', 'api_dispatch_detail'])
         self.assertEqual(reverse('api_dispatch_list', kwargs={
             'api_name': 'v1',
             'resource_name': 'notes',
@@ -1500,7 +1500,7 @@ class ModelResourceTestCase(TestCase):
         resource = NoteResource()
         patterns = resource.urls
         self.assertEqual(len(patterns), 5)
-        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_detail', 'api_dispatch_attribute'])
+        self.assertEqual([pattern.name for pattern in patterns], ['api_dispatch_list', 'api_get_schema', 'api_get_multiple', 'api_dispatch_attribute', 'api_dispatch_detail'])
         self.assertEqual(reverse('api_dispatch_list', urlconf='core.tests.manual_urls', kwargs={
             'resource_name': 'notes',
         }), '/notes/')
