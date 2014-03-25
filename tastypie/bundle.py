@@ -20,6 +20,7 @@ class Bundle(object):
                  related_name=None,
                  objects_saved=None,
                  related_objects_to_save=None,
+                 via_uri=False
                  ):
         self.obj = obj
         self.data = data or {}
@@ -30,6 +31,7 @@ class Bundle(object):
         self.errors = {}
         self.objects_saved = objects_saved or set()
         self.related_objects_to_save = related_objects_to_save or {}
+        self.via_uri = via_uri
 
     def __repr__(self):
         return "<Bundle for obj: '%s' and with data: '%s'>" % (self.obj, self.data)
