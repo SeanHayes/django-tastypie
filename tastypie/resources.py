@@ -681,7 +681,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
 
         return auth_result
 
-    def build_bundle(self, obj=None, data=None, request=None, objects_saved=None):
+    def build_bundle(self, obj=None, data=None, request=None, objects_saved=None, via_uri=False):
         """
         Given either an object, a data dictionary or both, builds a ``Bundle``
         for use throughout the ``dehydrate/hydrate`` cycle.
@@ -697,7 +697,8 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             obj=obj,
             data=data,
             request=request,
-            objects_saved=objects_saved
+            objects_saved=objects_saved,
+            via_uri=via_uri
         )
 
     def build_filters(self, filters=None):
@@ -2434,17 +2435,17 @@ class BaseModelResource(Resource):
                 # haven't already saved it.
                 obj_id = self.create_identifier(related_bundle.obj)
 
-                # Only build & save if there's data, not just a URI.
                 updated_related_bundle = related_resource.build_bundle(
                     obj=related_bundle.obj,
                     data=related_bundle.data,
                     request=bundle.request,
                     objects_saved=bundle.objects_saved
                 )
-                
+
                 # Only save related models if they're newly added, or if
                 # they've just been cleared.
-                if cleared or updated_related_bundle.obj._state.adding:
+                if (cleared or updated_related_bundle.obj._state.adding) and \
+                        not related_bundle.via_uri and obj_id not in bundle.objects_saved:
                     related_resource.save(updated_related_bundle)
                 related_objs.append(updated_related_bundle.obj)
             
