@@ -43,5 +43,17 @@ PASSWORD_HASHERS = (
     'django.contrib.auth.hashers.MD5PasswordHasher',
 )
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'loggers': {
+        'py.warnings': {
+            'level': 'ERROR',# change to WARNING to show DeprecationWarnings, etc.
+        },
+    },
+}
+
+TASTYPIE_FULL_DEBUG = False
+
 # to make sure timezones are handled correctly in Django>=1.4
 USE_TZ = True

@@ -7,13 +7,14 @@ import warnings
 from django.conf import settings
 from django.conf.urls import patterns, url
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, ValidationError
-from django.core.urlresolvers import NoReverseMatch, reverse, resolve, Resolver404, get_script_prefix
+from django.core.urlresolvers import NoReverseMatch, reverse, Resolver404, get_script_prefix
 from django.core.signals import got_request_exception
 from django.db import transaction
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.sql.constants import QUERY_TERMS
 from django.http import HttpResponse, HttpResponseNotFound, Http404
 from django.utils.cache import patch_cache_control, patch_vary_headers
+from django.utils.html import escape
 from django.utils import six
 
 from tastypie.authentication import Authentication
@@ -38,6 +39,11 @@ except ImportError:
     def csrf_exempt(func):
         return func
 
+
+def sanitize(text):
+    # We put the single quotes back, due to their frequent usage in exception
+    # messages.
+    return escape(text).replace('&#39;', "'").replace('&quot;', '"')
 
 
 class NOT_AVAILABLE:
@@ -216,10 +222,10 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
 
                 return response
             except (BadRequest, fields.ApiFieldError) as e:
-                data = {"error": e.args[0] if getattr(e, 'args') else ''}
+                data = {"error": sanitize(e.args[0]) if getattr(e, 'args') else ''}
                 return self.error_response(request, data, response_class=http.HttpBadRequest)
             except ValidationError as e:
-                data = {"error": e.messages}
+                data = {"error": sanitize(e.messages)}
                 return self.error_response(request, data, response_class=http.HttpBadRequest)
             except Exception as e:
                 if hasattr(e, 'response'):
@@ -258,7 +264,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
 
         if settings.DEBUG:
             data = {
-                "error_message": six.text_type(exception),
+                "error_message": sanitize(six.text_type(exception)),
                 "traceback": the_trace,
             }
             return self.error_response(request, data, response_class=response_class)
@@ -795,8 +801,22 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         if prefix and chomped_uri.startswith(prefix):
             chomped_uri = chomped_uri[len(prefix)-1:]
 
+        # We mangle the path a bit further & run URL resolution against *only*
+        # the current class. This ought to prevent bad URLs from resolving to
+        # incorrect data.
         try:
-            return resolve(chomped_uri)
+            found_at = chomped_uri.index(self._meta.resource_name)
+            chomped_uri = chomped_uri[found_at:]
+        except ValueError:
+            raise NotFound("An incorrect URL was provided '%s' for the '%s' resource." % (uri, self.__class__.__name__))
+
+        try:
+            for url_resolver in getattr(self, 'urls', []):
+                result = url_resolver.resolve(chomped_uri)
+
+                if result is not None:
+                    return result
+            raise Resolver404("URI not found in 'self.urls'.")
         except Resolver404:
             raise NotFound("The URL provided '%s' was not a link to a valid resource." % uri)
 
@@ -2364,10 +2384,6 @@ class BaseModelResource(Resource):
                 # haven't already saved it.
                 obj_id = self.create_identifier(related_bundle.obj)
 
-                if obj_id in bundle.objects_saved:
-                    # It's already been saved. We're done here.
-                    continue
-
                 # Only build & save if there's data, not just a URI.
                 updated_related_bundle = related_resource.build_bundle(
                     obj=related_bundle.obj,
@@ -2379,7 +2395,8 @@ class BaseModelResource(Resource):
                 # Only save related models if they're newly added, or if
                 # they've just been cleared.
                 if cleared or updated_related_bundle.obj._state.adding:
-                    related_resource.save(updated_related_bundle)
+                    if obj_id not in bundle.objects_saved:
+                        related_resource.save(updated_related_bundle)
                 related_objs.append(updated_related_bundle.obj)
             
             # In addition to models.ManyToManyField, ToManyField
