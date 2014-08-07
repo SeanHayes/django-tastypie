@@ -1,20 +1,45 @@
+from datetime import datetime, tzinfo, timedelta
+import json
+
 import django
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.test import TestCase
-import json
 from django.core.urlresolvers import reverse
-from core.models import Note, MediaBit
-from core.tests.resources import HttpRequest
-from core.tests.mocks import MockRequest
-from tastypie import fields
-from tastypie.exceptions import ApiFieldError
-from related_resource.api.resources import FreshNoteResource, CategoryResource, PersonResource, JobResource
-from related_resource.api.urls import api
-from related_resource.models import Category, Tag, Taggable, TaggableTag, ExtraData, Company, Person, Dog, DogHouse, Bone, Product, Address, Job, Payment
-from related_resource.models import Label
 from django.db.models.signals import pre_save
-from datetime import datetime, tzinfo, timedelta
+from django.test import TestCase
+
+from tastypie import fields
+from tastypie.exceptions import ApiFieldError, NotFound
+
+from core.models import Note, MediaBit
+from core.tests.mocks import MockRequest
+from core.tests.resources import HttpRequest
+
+from related_resource.api.resources import CategoryResource, ForumResource, FreshNoteResource, JobResource, NoteResource, PersonResource, UserResource
+from related_resource.api.urls import api
+from related_resource.models import Category, Label, Tag, Taggable, TaggableTag, ExtraData, Company, Person, Dog, DogHouse, Bone, Product, Address, Job, Payment
+
+
+class M2MResourcesTestCase(TestCase):
+    def test_same_object_added(self):
+        """
+        From Issue #1035
+        """
+        
+        user=User.objects.create(username='gjcourt')
+        
+        ur=UserResource()
+        fr=ForumResource()
+        
+        resp = self.client.post(fr.get_resource_uri(), content_type='application/json', data=json.dumps({
+            'name': 'Test Forum',
+            'members': [ur.get_resource_uri(user)],
+            'moderators': [ur.get_resource_uri(user)],
+        }))
+        self.assertEqual(resp.status_code, 201, resp.content)
+        data = json.loads(resp.content.decode('utf-8'))
+        self.assertEqual(len(data['moderators']), 1)
+        self.assertEqual(len(data['members']), 1)
 
 
 class RelatedResourceTest(TestCase):
@@ -255,7 +280,7 @@ class RelationshipOppositeFromModelTestCase(TestCase):
         self.some_time_str = datetime.now().strftime('%Y-%m-%d %H:%M')
         job = Job.objects.create(name='SomeJob')
         payment = Payment.objects.create(job=job, scheduled=self.some_time_str)
-        
+
     def test_create_similar(self):
         # We submit to job with the related payment included.
         # Note that on the resource, the payment related resource is defined
@@ -263,7 +288,7 @@ class RelationshipOppositeFromModelTestCase(TestCase):
         # but it has a reverse relationship defined by the Payment class
         resource = JobResource()
         data = {
-            'name': 'OtherJob', 
+            'name': 'OtherJob',
             'payment': {
                 'scheduled': self.some_time_str
             }
@@ -644,7 +669,7 @@ class RelatedSaveCallsTest(TestCase):
         taggable_tag = tag.taggabletags.all()[0]
         self.assertEqual(taggable_tag.extra, 1234)
 
-    def test_no_save_m2m_unchanged_exisitng_data_persists(self):
+    def test_no_save_m2m_unchanged_existing_data_persists(self):
         """
         Data should persist when posting an updated detail object with
         unchanged reverse realated objects.
@@ -686,3 +711,46 @@ class RelatedSaveCallsTest(TestCase):
         self.assertEqual(dog_bones[0], bone1)
         self.assertEqual(dog_bones[1], bone2)
 
+
+class CorrectUriRelationsTestCase(TestCase):
+    """
+    Validate that incorrect URI (with PKs that line up to valid data) are not
+    accepted.
+    """
+    urls = 'related_resource.api.urls'
+
+    def test_incorrect_uri(self):
+        self.assertEqual(Note.objects.count(), 2)
+        nr = NoteResource()
+
+        # For this test, we need a ``User`` with the same PK as a ``Note``.
+        note_1 = Note.objects.latest('created')
+        user_2 = User.objects.create(
+            id=note_1.pk,
+            username='valid',
+            email='valid@exmaple.com',
+            password='junk'
+        )
+
+        data = {
+            # This URI is flat-out wrong (wrong resource).
+            # This should cause the request to fail.
+            'author': '/v1/notes/{0}/'.format(
+                note_1.pk
+            ),
+            'title': 'Nopenopenope',
+            'slug': 'invalid-request',
+            'content': "This shouldn't work.",
+            'is_active': True,
+        }
+
+        request = MockRequest()
+        request.GET = {'format': 'json'}
+        request.method = 'POST'
+        request.set_body(json.dumps(data))
+
+        with self.assertRaises(NotFound) as cm:
+            nr.post_list(request)
+
+        self.assertEqual(str(cm.exception), "An incorrect URL was provided '/v1/notes/2/' for the 'UserResource' resource.")
+        self.assertEqual(Note.objects.count(), 2)
