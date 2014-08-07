@@ -171,8 +171,12 @@ class ApiField(object):
                         return val
                 except ObjectDoesNotExist:
                     pass
-            if self.instance_name and hasattr(bundle.obj, self.instance_name):
-                return getattr(bundle.obj, self.instance_name)
+            if self.instance_name:
+                try:
+                    if hasattr(bundle.obj, self.instance_name):
+                        return getattr(bundle.obj, self.instance_name)
+                except ObjectDoesNotExist:
+                    pass
             if self.has_default():
                 if callable(self._default):
                     return self._default()

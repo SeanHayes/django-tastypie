@@ -2373,10 +2373,6 @@ class BaseModelResource(Resource):
                 # haven't already saved it.
                 obj_id = self.create_identifier(related_bundle.obj)
 
-                if obj_id in bundle.objects_saved:
-                    # It's already been saved. We're done here.
-                    continue
-
                 # Only build & save if there's data, not just a URI.
                 updated_related_bundle = related_resource.build_bundle(
                     obj=related_bundle.obj,
@@ -2388,7 +2384,8 @@ class BaseModelResource(Resource):
                 # Only save related models if they're newly added, or if
                 # they've just been cleared.
                 if cleared or updated_related_bundle.obj._state.adding:
-                    related_resource.save(updated_related_bundle)
+                    if obj_id not in bundle.objects_saved:
+                        related_resource.save(updated_related_bundle)
                 related_objs.append(updated_related_bundle.obj)
             
             # In addition to models.ManyToManyField, ToManyField
