@@ -835,9 +835,30 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         to populate the resource.
         """
         use_in = ['all', 'list' if for_list else 'detail']
+        
+        all_fields = set(self.fields.keys())
+
+        allowed_fields = None
+        excluded_fields = None
+        
+        if 'fields' in bundle.request.GET:
+            allowed_fields = bundle.request.GET.getlist('fields')
+        
+        if 'excludes' in bundle.request.GET:
+            excluded_fields = bundle.request.GET.getlist('excludes')
+        
+        if allowed_fields is not None:
+            allowed_fields = all_fields.intersection(allowed_fields)
+        else:
+            allowed_fields = set(all_fields)
+        
+        if excluded_fields is not None:
+            allowed_fields = allowed_fields.difference(excluded_fields)
 
         # Dehydrate each field.
-        for field_name, field_object in self.fields.items():
+        for field_name in allowed_fields:
+            field_object = self.fields[field_name]
+            
             # If it's not for use in this mode, skip
             field_use_in = getattr(field_object, 'use_in', 'all')
             if callable(field_use_in):
@@ -2391,7 +2412,8 @@ class BaseModelResource(Resource):
             # In addition to models.ManyToManyField, ToManyField
             # is used for models.ForeignKey reverse relations, in which case calling
             # add() saves each related obj a 2nd time.
-            # If we can verify that this is a one-to-many relation, skip re-adding it.
+            # If we can verify that this is a one-to-many relation, skip calling
+            # add() on the related manager.
             if not related_to_one:
                 related_mngr.add(*related_objs)
 
