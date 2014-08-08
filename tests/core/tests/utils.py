@@ -4,6 +4,7 @@ import mock
 from django.http import HttpRequest
 from django.test import TestCase
 
+from tastypie import fields
 from tastypie.exceptions import BadRequest
 from tastypie.serializers import Serializer
 from tastypie.utils.mime import determine_format, build_content_type
@@ -99,6 +100,18 @@ class MimeTestCase(TestCase):
 
         request.META = {'HTTP_ACCEPT': 'bogon'}
         self.assertRaises(BadRequest, determine_format, request, serializer)
+
+
+def adjust_schema(schema_dict):
+    for field, field_info in schema_dict['fields'].items():
+        if isinstance(field_info['default'], basestring) and field_info['type'] in ('datetime', 'date',):
+            field_info['default'] = 'The current date.'
+        if isinstance(field_info['default'], (datetime.datetime, datetime.date)):
+            field_info['default'] = 'The current date.'
+        if isinstance(field_info['default'], fields.NOT_PROVIDED):
+            field_info['default'] = 'No default provided.'
+
+    return schema_dict
 
 
 if TZ_AVAILABLE:
