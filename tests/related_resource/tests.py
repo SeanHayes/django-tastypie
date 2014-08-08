@@ -20,6 +20,9 @@ from related_resource.api.urls import api
 from related_resource.models import Category, Contact, ContactGroup, Label, Tag, Taggable, TaggableTag, ExtraData, Company, Person, Dog, DogHouse, Bone, Product, Address, Job, Payment
 
 
+old_saving_algorithm = django.VERSION[1] < 6
+
+
 class M2MResourcesTestCase(TestCase):
     def test_same_object_added(self):
         """
@@ -637,7 +640,9 @@ class RelatedSaveCallsTest(TestCase):
 
         request.set_body(json.dumps(body_dict))
 
-        with self.assertNumQueries(5):
+        num_queries = 5 if old_saving_algorithm else 4
+
+        with self.assertNumQueries(num_queries):
             resp = resource.wrap_view('dispatch_list')(request)
         
         self.assertEqual(resp.status_code, 201)
@@ -657,7 +662,9 @@ class RelatedSaveCallsTest(TestCase):
             'api_name': resource._meta.api_name
         })
 
-        with self.assertNumQueries(7):
+        num_queries = 7 if old_saving_algorithm else 5
+
+        with self.assertNumQueries(num_queries):
             resource.put_detail(request)
 
         #'extra' should have changed
@@ -694,7 +701,9 @@ class RelatedSaveCallsTest(TestCase):
         
         request.set_body(json.dumps(body_dict))
         
-        with self.assertNumQueries(12):
+        num_queries = 12 if old_saving_algorithm else 9
+
+        with self.assertNumQueries(num_queries):
             resp = resource.wrap_view('dispatch_detail')(request, pk=dog.pk)
         
         self.assertEqual(resp.status_code, 204)
@@ -737,7 +746,9 @@ class RelatedSaveCallsTest(TestCase):
         request._load_post_and_files = lambda *args, **kwargs: None
         request.set_body(json.dumps(data))
         
-        with self.assertNumQueries(9):
+        num_queries = 9 if old_saving_algorithm else 8
+
+        with self.assertNumQueries(num_queries):
             response = resource.wrap_view('dispatch_detail')(request, pk=c1.pk)
         
         self.assertEqual(response.status_code, 204, response.content)
