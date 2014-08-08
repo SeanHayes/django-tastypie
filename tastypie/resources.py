@@ -692,7 +692,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
 
         return auth_result
 
-    def build_bundle(self, obj=None, data=None, request=None, objects_saved=None):
+    def build_bundle(self, obj=None, data=None, request=None, objects_saved=None, via_uri=False):
         """
         Given either an object, a data dictionary or both, builds a ``Bundle``
         for use throughout the ``dehydrate/hydrate`` cycle.
@@ -708,7 +708,8 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
             obj=obj,
             data=data,
             request=request,
-            objects_saved=objects_saved
+            objects_saved=objects_saved,
+            via_uri=via_uri
         )
 
     def build_filters(self, filters=None):
@@ -2403,8 +2404,12 @@ class BaseModelResource(Resource):
             if not related_mngr:
                 continue
 
+            related_field = field_object.to_class.base_fields.get(field_object.related_name)
+            related_to_one = isinstance(related_field, fields.ToOneField)
+
             cleared = False
-            if hasattr(related_mngr, 'clear'):
+            # don't clear reverse foreignkey relationships
+            if not related_to_one and hasattr(related_mngr, 'clear'):
                 # FIXME: Dupe the original bundle, copy in the new object &
                 #        check the perms on that (using the related resource)?
 
@@ -2414,9 +2419,6 @@ class BaseModelResource(Resource):
 
             related_objs = []
             
-            related_field = field_object.to_class.base_fields.get(field_object.related_name)
-            related_to_one = isinstance(related_field, fields.ToOneField)
-
             for related_bundle in bundle.data[field_name]:
                 related_resource = field_object.get_related_resource(bundle.obj)
 
@@ -2424,7 +2426,6 @@ class BaseModelResource(Resource):
                 # haven't already saved it.
                 obj_id = self.create_identifier(related_bundle.obj)
 
-                # Only build & save if there's data, not just a URI.
                 updated_related_bundle = related_resource.build_bundle(
                     obj=related_bundle.obj,
                     data=related_bundle.data,
@@ -2434,7 +2435,8 @@ class BaseModelResource(Resource):
                 
                 # Only save related models if they're newly added, or if
                 # they've just been cleared.
-                if cleared or updated_related_bundle.obj._state.adding:
+                if (cleared or updated_related_bundle.obj._state.adding) and \
+                        not related_bundle.via_uri:
                     if obj_id not in bundle.objects_saved:
                         related_resource.save(updated_related_bundle)
                 related_objs.append(updated_related_bundle.obj)
