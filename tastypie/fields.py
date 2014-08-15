@@ -74,7 +74,7 @@ class ApiField(object):
         self.null = null
         self.blank = blank
         self.readonly = readonly
-        self.value = None
+        self.value = None # REMOVEME
         self.unique = unique
         self.use_in = 'all'
 
@@ -486,10 +486,10 @@ class RelatedField(ApiField):
 
         self.api_name = None
         self.resource_name = None
+        self._rel_resources = {}
 
         if self.to == 'self':
             self.self_referential = True
-            self._to_class = self.__class__
 
     def contribute_to_class(self, cls, name):
         super(RelatedField, self).contribute_to_class(cls, name)
@@ -504,6 +504,9 @@ class RelatedField(ApiField):
         """
         Instaniates the related resource.
         """
+        if related_instance in self._rel_resources:
+            return self._rel_resources[related_instance]
+        
         related_resource = self.to_class()
 
         # Fix the ``api_name`` if it's not present.
@@ -511,8 +514,8 @@ class RelatedField(ApiField):
             if self._resource and not self._resource._meta.api_name is None:
                 related_resource._meta.api_name = self._resource._meta.api_name
 
-        # Try to be efficient about DB queries.
-        related_resource.instance = related_instance
+        self._rel_resources[related_instance] = related_resource
+        
         return related_resource
 
     @property
@@ -557,7 +560,11 @@ class RelatedField(ApiField):
             return related_resource.get_resource_uri(bundle)
         else:
             # ZOMG extra data and big payloads.
+<<<<<<< HEAD
             new_bundle = related_resource.build_bundle(
+=======
+            bundle = related_resource.build_bundle(
+>>>>>>> Removed data shared on Field objects, changed code to reuse related resources.
                 obj=bundle.obj,
                 request=bundle.request,
                 objects_saved=bundle.objects_saved,
@@ -647,7 +654,7 @@ class RelatedField(ApiField):
         Accepts either a URI, a data dictionary (or dictionary-like structure)
         or an object with a ``pk``.
         """
-        self.fk_resource = self.to_class()
+        fk_resource = self.to_class()
         kwargs = {
             'request': request,
             'related_bundle': related_bundle,
@@ -660,15 +667,15 @@ class RelatedField(ApiField):
             return value
         elif isinstance(value, six.string_types):
             # We got a URI. Load the object and assign it.
-            return self.resource_from_uri(self.fk_resource, value, **kwargs)
+            return self.resource_from_uri(fk_resource, value, **kwargs)
         elif hasattr(value, 'items'):
             # We've got a data dictionary.
             # Since this leads to creation, this is the only one of these
             # methods that might care about "parent" data.
-            return self.resource_from_data(self.fk_resource, value, **kwargs)
+            return self.resource_from_data(fk_resource, value, **kwargs)
         elif hasattr(value, 'pk'):
             # We've got an object with a primary key.
-            return self.resource_from_pk(self.fk_resource, value, **kwargs)
+            return self.resource_from_pk(fk_resource, value, **kwargs)
         else:
             raise ApiFieldError("The '%s' field was given data that was not a URI, not a dictionary-alike and does not have a 'pk' attribute: %s." % (self.instance_name, value))
 
@@ -707,7 +714,6 @@ class ToOneField(RelatedField):
             unique=unique, help_text=help_text, use_in=use_in,
             full_list=full_list, full_detail=full_detail
         )
-        self.fk_resource = None
 
     def dehydrate(self, bundle, for_list=True):
         foreign_obj = None
@@ -736,9 +742,15 @@ class ToOneField(RelatedField):
             
             return None        
 
+<<<<<<< HEAD
         self.fk_resource = self.get_related_resource(foreign_obj)
         fk_bundle = Bundle(obj=foreign_obj, request=bundle.request, related_name=self.related_name, related_obj=bundle.obj)
         return self.dehydrate_related(fk_bundle, self.fk_resource, for_list=for_list)
+=======
+        fk_resource = self.get_related_resource(foreign_obj)
+        fk_bundle = Bundle(obj=foreign_obj, request=bundle.request)
+        return self.dehydrate_related(fk_bundle, fk_resource, for_list=for_list)
+>>>>>>> Removed data shared on Field objects, changed code to reuse related resources.
 
     def hydrate(self, bundle):
         value = super(ToOneField, self).hydrate(bundle)
@@ -785,7 +797,6 @@ class ToManyField(RelatedField):
             unique=unique, help_text=help_text, use_in=use_in,
             full_list=full_list, full_detail=full_detail
         )
-        self.m2m_bundles = []
 
     def dehydrate(self, bundle, for_list=True):
         if not bundle.obj or not bundle.obj.pk:
@@ -820,11 +831,11 @@ class ToManyField(RelatedField):
 
             return []
 
-        self.m2m_resources = []
         m2m_dehydrated = []
 
         # TODO: Also model-specific and leaky. Relies on there being a
         #       ``Manager`` there.
+<<<<<<< HEAD
         m2m_dehydrated = [
             self.dehydrate_related(
                 Bundle(obj=m2m, request=bundle.request),
@@ -833,6 +844,12 @@ class ToManyField(RelatedField):
             )
             for m2m in the_m2ms.all()
         ]
+=======
+        for m2m in the_m2ms.all():
+            m2m_resource = self.get_related_resource(m2m)
+            m2m_bundle = Bundle(obj=m2m, request=bundle.request)
+            m2m_dehydrated.append(self.dehydrate_related(m2m_bundle, m2m_resource, for_list=for_list))
+>>>>>>> Removed data shared on Field objects, changed code to reuse related resources.
 
         return m2m_dehydrated
 
