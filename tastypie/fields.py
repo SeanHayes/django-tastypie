@@ -74,7 +74,6 @@ class ApiField(object):
         self.null = null
         self.blank = blank
         self.readonly = readonly
-        self.value = None # REMOVEME
         self.unique = unique
         self.use_in = 'all'
 
