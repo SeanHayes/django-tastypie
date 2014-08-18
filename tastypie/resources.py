@@ -517,6 +517,9 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
 
         request_method = request.method.lower()
         allows = ','.join([meth.upper() for meth in allowed])
+        
+        if getattr(settings, "TASTYPIE_SUPPORT_HEAD", False) and request_method == 'head':
+            request_method = 'get'
 
         if request_method == "options":
             response = HttpResponse(allows)
@@ -1200,7 +1203,11 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         Mostly a useful shortcut/hook.
         """
         desired_format = self.determine_format(request)
-        serialized = self.serialize(request, data, desired_format)
+        
+        if request.method == 'HEAD':
+            serialized = ''
+        else:
+            serialized = self.serialize(request, data, desired_format)
         return response_class(content=serialized, content_type=build_content_type(desired_format), **response_kwargs)
 
     def error_response(self, request, errors, response_class=None):
