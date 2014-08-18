@@ -1,6 +1,7 @@
 from __future__ import unicode_literals
 import datetime
 import re
+
 import django
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
@@ -63,6 +64,34 @@ if yaml is not None:
             Composer.__init__(self)
             TastypieConstructor.__init__(self)
             Resolver.__init__(self)
+
+
+NUM = 0
+DICT = 1
+LIST = 2
+STR = 3
+BUNDLE = 4
+DATETIME = 5
+DATE = 6
+TIME = 7
+
+stypes = {
+    float: NUM,
+    bool: NUM,
+    dict: DICT,
+    list: LIST,
+    tuple: LIST,
+    Bundle: BUNDLE,
+    datetime.datetime: DATETIME,
+    datetime.date: DATE,
+    datetime.time: TIME,
+}
+
+for integer_type in six.integer_types:
+    stypes[integer_type] = NUM
+
+for string_type in six.string_types:
+    stypes[string_type] = STR
 
 
 class Serializer(object):
@@ -234,39 +263,36 @@ class Serializer(object):
         This brings complex Python data structures down to native types of the
         serialization format(s).
         """
-        if isinstance(data, (list, tuple)):
-            return [self.to_simple(item, options) for item in data]
-        if isinstance(data, dict):
-            return dict((key, self.to_simple(val, options)) for (key, val) in data.items())
-        elif isinstance(data, Bundle):
-            return dict((key, self.to_simple(val, options)) for (key, val) in data.data.items())
-        elif hasattr(data, 'dehydrated_type'):
-            if getattr(data, 'dehydrated_type', None) == 'related' and data.is_m2m == False:
-                if data.full:
-                    return self.to_simple(data.fk_resource, options)
-                else:
-                    return self.to_simple(data.value, options)
-            elif getattr(data, 'dehydrated_type', None) == 'related' and data.is_m2m == True:
-                if data.full:
-                    return [self.to_simple(bundle, options) for bundle in data.m2m_bundles]
-                else:
-                    return [self.to_simple(val, options) for val in data.value]
-            else:
-                return self.to_simple(data.value, options)
-        elif isinstance(data, datetime.datetime):
-            return self.format_datetime(data)
-        elif isinstance(data, datetime.date):
-            return self.format_date(data)
-        elif isinstance(data, datetime.time):
-            return self.format_time(data)
-        elif isinstance(data, bool):
-            return data
-        elif isinstance(data, (six.integer_types, float)):
-            return data
-        elif data is None:
+        if data is None:
             return None
-        else:
+        
+        data_type = type(data)
+        
+        stype = STR
+        
+        for dt in data_type.__mro__:
+            try:
+                stype = stypes[dt]
+                break
+            except KeyError:
+                pass
+        
+        if stype == NUM:
+            return data
+        if stype == DICT:
+            return dict((key, self.to_simple(val, options)) for key, val in six.iteritems(data))
+        if stype == STR:
             return force_text(data)
+        if stype == LIST:
+            return [self.to_simple(item, options) for item in data]
+        if stype == BUNDLE:
+            return dict((key, self.to_simple(val, options)) for key, val in six.iteritems(data.data))
+        if stype == DATETIME:
+            return self.format_datetime(data)
+        if stype == DATE:
+            return self.format_date(data)
+        if stype == TIME:
+            return self.format_time(data)
 
     def to_etree(self, data, options=None, name=None, depth=0):
         """
