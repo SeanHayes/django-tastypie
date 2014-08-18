@@ -742,6 +742,29 @@ class ResourceTestCase(TestCase):
         request_method = basic.method_check(request, allowed=['post', 'get', 'put'])
         self.assertEqual(request_method, 'post')
 
+        request = HttpRequest()
+        request.method = 'HEAD'
+        request.POST = {'format': 'json'}
+
+        # Allowed (single).
+        with self.settings(TASTYPIE_SUPPORT_HEAD=True):
+            request_method = basic.method_check(request, allowed=['get'])
+            self.assertEqual(request_method, 'get')
+            
+            # make sure this only simulates the GET method
+            try:
+                basic.method_check(request, allowed=['post'])
+                self.fail("Should have thrown an exception.")
+            except ImmediateHttpResponse as e:
+                self.assertEqual(e.response['Allow'], 'POST')
+        
+        try:
+            basic.method_check(request, allowed=['get'])
+            self.fail("Should have thrown an exception.")
+        except ImmediateHttpResponse as e:
+            self.assertEqual(e.response['Allow'], 'GET')
+
+
     def test_auth_check(self):
         basic = BasicResource()
         request = HttpRequest()
@@ -1923,6 +1946,16 @@ class ModelResourceTestCase(TestCase):
         object_list = resource_2.obj_get_list(base_bundle)
         ordered_list = resource_2.apply_sorting(object_list, options={'order_by': ['-user__username', 'title']})
         self.assertEqual([obj.id for obj in ordered_list], [2, 1, 6, 4])
+
+    def test_head_list(self):
+        resource = NoteResource()
+        request = HttpRequest()
+        request.method = 'HEAD'
+        request.GET = {'format': 'json'}
+
+        resp = resource.get_list(request)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content, b'')
 
     def test_get_list(self):
         resource = NoteResource()
