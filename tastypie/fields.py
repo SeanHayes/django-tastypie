@@ -24,6 +24,8 @@ DATETIME_REGEX = re.compile('^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})(T|
 
 class ApiField(object):
     """The base implementation of a field used by the resources."""
+    is_m2m = False
+    is_related = False
     dehydrated_type = 'string'
     help_text = ''
 
@@ -69,6 +71,8 @@ class ApiField(object):
         self.instance_name = None
         self._resource = None
         self.attribute = attribute
+        # Check for `__` in the field for looking through the relation.
+        self._attrs = attribute.split('__') if attribute is not None and isinstance(attribute, six.string_types) else []
         self._default = default
         self.null = null
         self.blank = blank
@@ -107,11 +111,9 @@ class ApiField(object):
         resource.
         """
         if self.attribute is not None:
-            # Check for `__` in the field for looking through the relation.
-            attrs = self.attribute.split('__')
             current_object = bundle.obj
 
-            for attr in attrs:
+            for attr in self._attrs:
                 previous_object = current_object
                 current_object = getattr(current_object, attr, None)
 
@@ -156,7 +158,7 @@ class ApiField(object):
         if self.readonly:
             return None
         if not self.instance_name in bundle.data:
-            if getattr(self, 'is_related', False) and not getattr(self, 'is_m2m', False):
+            if self.is_related and not self.is_m2m:
                 # We've got an FK (or alike field) & a possible parent object.
                 # Check for it.
                 if bundle.related_obj and bundle.related_name in (self.attribute, self.instance_name):
@@ -468,33 +470,20 @@ class RelatedField(ApiField):
         bundle and returns ``True`` or ``False``.Depends on ``full``
         being ``True``. Defaults to ``True``.
         """
-        self.instance_name = None
-        self._resource = None
-        self.to = to
-        self.attribute = attribute
+        super(RelatedField, self).__init__(attribute=attribute, default=default, null=null, blank=blank, readonly=readonly, unique=unique, help_text=help_text, use_in=use_in)
         self.related_name = related_name
-        self._default = default
-        self.null = null
-        self.blank = blank
-        self.readonly = readonly
-        self.full = full
-        self.api_name = None
-        self.resource_name = None
-        self.unique = unique
+        self.to = to
         self._to_class = None
-        self.use_in = 'all'
+        self.full = full
         self.full_list = full_list
         self.full_detail = full_detail
 
-        if use_in in ['all', 'detail', 'list'] or callable(use_in):
-            self.use_in = use_in
+        self.api_name = None
+        self.resource_name = None
 
         if self.to == 'self':
             self.self_referential = True
             self._to_class = self.__class__
-
-        if help_text:
-            self.help_text = help_text
 
     def contribute_to_class(self, cls, name):
         super(RelatedField, self).contribute_to_class(cls, name)
@@ -719,10 +708,9 @@ class ToOneField(RelatedField):
         error_to_raise = None
 
         if isinstance(self.attribute, six.string_types):
-            attrs = self.attribute.split('__')
             foreign_obj = bundle.obj
 
-            for attr in attrs:
+            for attr in self._attrs:
                 previous_obj = foreign_obj
                 try:
                     foreign_obj = getattr(foreign_obj, attr, None)
@@ -805,10 +793,9 @@ class ToManyField(RelatedField):
         attr = self.attribute
 
         if isinstance(self.attribute, six.string_types):
-            attrs = self.attribute.split('__')
             the_m2ms = bundle.obj
 
-            for attr in attrs:
+            for attr in self._attrs:
                 previous_obj = the_m2ms
                 try:
                     the_m2ms = getattr(the_m2ms, attr, None)
@@ -832,11 +819,14 @@ class ToManyField(RelatedField):
 
         # TODO: Also model-specific and leaky. Relies on there being a
         #       ``Manager`` there.
-        for m2m in the_m2ms.all():
-            m2m_resource = self.get_related_resource(m2m)
-            m2m_bundle = Bundle(obj=m2m, request=bundle.request)
-            self.m2m_resources.append(m2m_resource)
-            m2m_dehydrated.append(self.dehydrate_related(m2m_bundle, m2m_resource, for_list=for_list))
+        m2m_dehydrated = [
+            self.dehydrate_related(
+                Bundle(obj=m2m, request=bundle.request),
+                self.get_related_resource(m2m),
+                for_list=for_list
+            )
+            for m2m in the_m2ms.all()
+        ]
 
         return m2m_dehydrated
 
@@ -850,10 +840,9 @@ class ToManyField(RelatedField):
         if bundle.data.get(self.instance_name) is None:
             if self.blank:
                 return []
-            elif self.null:
+            if self.null:
                 return []
-            else:
-                raise ApiFieldError("The '%s' field has no data and doesn't allow a null value." % self.instance_name)
+            raise ApiFieldError("The '%s' field has no data and doesn't allow a null value." % self.instance_name)
 
         m2m_hydrated = []
 
@@ -871,6 +860,20 @@ class ToManyField(RelatedField):
                 kwargs['related_name'] = self.related_name
 
             m2m_hydrated.append(self.build_related_resource(value, **kwargs))
+        
+        kwargs = {
+            'request': bundle.request,
+        }
+
+        if self.related_name:
+            kwargs['related_obj'] = bundle.obj
+            kwargs['related_name'] = self.related_name
+        
+        m2m_hydrated = [
+            self.build_related_resource(value, **kwargs)
+            for value in bundle.data.get(self.instance_name)
+            if value is not None
+        ]
 
         return m2m_hydrated
 

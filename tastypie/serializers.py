@@ -215,20 +215,20 @@ class Serializer(object):
         Given some data and a format, calls the correct method to serialize
         the data and returns the result.
         """
-        desired_format = None
+        method = None
         if options is None:
             options = {}
 
         for short_format, long_format in self.content_types.items():
             if format == long_format:
-                if hasattr(self, "to_%s" % short_format):
-                    desired_format = short_format
+                method = getattr(self, "to_%s" % short_format, None)
+                if method:
                     break
 
-        if desired_format is None:
+        if method is None:
             raise UnsupportedFormat("The format indicated '%s' had no available serialization method. Please check your ``formats`` and ``content_types`` on your Serializer." % format)
 
-        serialized = getattr(self, "to_%s" % desired_format)(bundle, options)
+        serialized = method(bundle, options)
         return serialized
 
     def deserialize(self, content, format='application/json'):
@@ -236,23 +236,23 @@ class Serializer(object):
         Given some data and a format, calls the correct method to deserialize
         the data and returns the result.
         """
-        desired_format = None
+        method = None
 
         format = format.split(';')[0]
 
         for short_format, long_format in self.content_types.items():
             if format == long_format:
-                if hasattr(self, "from_%s" % short_format):
-                    desired_format = short_format
+                method = getattr(self, "from_%s" % short_format, None)
+                if method:
                     break
 
-        if desired_format is None:
+        if method is None:
             raise UnsupportedFormat("The format indicated '%s' had no available deserialization method. Please check your ``formats`` and ``content_types`` on your Serializer." % format)
 
         if isinstance(content, six.binary_type):
             content = force_text(content)
 
-        deserialized = getattr(self, "from_%s" % desired_format)(content)
+        deserialized = method(content)
         return deserialized
 
     def to_simple(self, data, options):
@@ -280,13 +280,16 @@ class Serializer(object):
         if stype == NUM:
             return data
         if stype == DICT:
-            return dict((key, self.to_simple(val, options)) for key, val in six.iteritems(data))
+            to_simple = self.to_simple
+            return dict((key, to_simple(val, options)) for key, val in six.iteritems(data))
         if stype == STR:
             return force_text(data)
         if stype == LIST:
-            return [self.to_simple(item, options) for item in data]
+            to_simple = self.to_simple
+            return [to_simple(item, options) for item in data]
         if stype == BUNDLE:
-            return dict((key, self.to_simple(val, options)) for key, val in six.iteritems(data.data))
+            to_simple = self.to_simple
+            return dict((key, to_simple(val, options)) for key, val in six.iteritems(data.data))
         if stype == DATETIME:
             return self.format_datetime(data)
         if stype == DATE:
