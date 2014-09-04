@@ -2,10 +2,11 @@ from __future__ import unicode_literals
 import datetime
 from dateutil.parser import parse
 from decimal import Decimal
-import re
+
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.utils import datetime_safe, importlib
 from django.utils import six
+
 from tastypie.bundle import Bundle
 from tastypie.exceptions import ApiFieldError, NotFound
 from tastypie.utils import dict_strip_unicode_keys, make_aware
@@ -14,10 +15,6 @@ from tastypie.utils import dict_strip_unicode_keys, make_aware
 class NOT_PROVIDED:
     def __str__(self):
         return 'No default provided.'
-
-
-DATE_REGEX = re.compile('^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2}).*?$')
-DATETIME_REGEX = re.compile('^(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})(T|\s+)(?P<hour>\d{2}):(?P<minute>\d{2}):(?P<second>\d{2}).*?$')
 
 
 # All the ApiField variants.
@@ -328,12 +325,11 @@ class DateField(ApiField):
             return None
 
         if isinstance(value, six.string_types):
-            match = DATE_REGEX.search(value)
+            try:
+                year, month, day = value[:10].split('-')
 
-            if match:
-                data = match.groupdict()
-                return datetime_safe.date(int(data['year']), int(data['month']), int(data['day']))
-            else:
+                return datetime_safe.date(int(year), int(month), int(day))
+            except ValueError:
                 raise ApiFieldError("Date provided to '%s' field doesn't appear to be a valid date string: '%s'" % (self.instance_name, value))
 
         return value
@@ -366,12 +362,12 @@ class DateTimeField(ApiField):
             return None
 
         if isinstance(value, six.string_types):
-            match = DATETIME_REGEX.search(value)
+            try:
+                year, month, day = value[:10].split('-')
+                hour, minute, second = value[10:18].split(':')
 
-            if match:
-                data = match.groupdict()
-                return make_aware(datetime_safe.datetime(int(data['year']), int(data['month']), int(data['day']), int(data['hour']), int(data['minute']), int(data['second'])))
-            else:
+                return make_aware(datetime_safe.datetime(int(year), int(month), int(day), int(hour), int(minute), int(second)))
+            except ValueError:
                 raise ApiFieldError("Datetime provided to '%s' field doesn't appear to be a valid datetime string: '%s'" % (self.instance_name, value))
 
         return value

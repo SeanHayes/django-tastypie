@@ -66,32 +66,32 @@ if yaml is not None:
             Resolver.__init__(self)
 
 
-NUM = 0
-DICT = 1
-LIST = 2
-STR = 3
-BUNDLE = 4
-DATETIME = 5
-DATE = 6
-TIME = 7
+_NUM = 0
+_DICT = 1
+_LIST = 2
+_STR = 3
+_BUNDLE = 4
+_DATETIME = 5
+_DATE = 6
+_TIME = 7
 
 stypes = {
-    float: NUM,
-    bool: NUM,
-    dict: DICT,
-    list: LIST,
-    tuple: LIST,
-    Bundle: BUNDLE,
-    datetime.datetime: DATETIME,
-    datetime.date: DATE,
-    datetime.time: TIME,
+    float: _NUM,
+    bool: _NUM,
+    dict: _DICT,
+    list: _LIST,
+    tuple: _LIST,
+    Bundle: _BUNDLE,
+    datetime.datetime: _DATETIME,
+    datetime.date: _DATE,
+    datetime.time: _TIME,
 }
 
 for integer_type in six.integer_types:
-    stypes[integer_type] = NUM
+    stypes[integer_type] = _NUM
 
 for string_type in six.string_types:
-    stypes[string_type] = STR
+    stypes[string_type] = _STR
 
 
 class Serializer(object):
@@ -148,6 +148,18 @@ class Serializer(object):
                 self.supported_formats.append(self.content_types[format])
             except KeyError:
                 raise ImproperlyConfigured("Content type for specified type '%s' not found. Please provide it at either the class level or via the arguments." % format)
+        
+        self._from_methods = {}
+        self._to_methods = {}
+        
+        for short_format, long_format in self.content_types.items():
+            method = getattr(self, "from_%s" % short_format, None)
+            
+            self._from_methods[long_format] = method
+            
+            method = getattr(self, "to_%s" % short_format, None)
+            
+            self._to_methods[long_format] = method
 
     def get_mime_for_format(self, format):
         """
@@ -219,17 +231,12 @@ class Serializer(object):
         if options is None:
             options = {}
 
-        for short_format, long_format in self.content_types.items():
-            if format == long_format:
-                method = getattr(self, "to_%s" % short_format, None)
-                if method:
-                    break
+        method = self._to_methods.get(format)
 
         if method is None:
             raise UnsupportedFormat("The format indicated '%s' had no available serialization method. Please check your ``formats`` and ``content_types`` on your Serializer." % format)
 
-        serialized = method(bundle, options)
-        return serialized
+        return method(bundle, options)
 
     def deserialize(self, content, format='application/json'):
         """
@@ -240,11 +247,7 @@ class Serializer(object):
 
         format = format.split(';')[0]
 
-        for short_format, long_format in self.content_types.items():
-            if format == long_format:
-                method = getattr(self, "from_%s" % short_format, None)
-                if method:
-                    break
+        method = self._from_methods.get(format)
 
         if method is None:
             raise UnsupportedFormat("The format indicated '%s' had no available deserialization method. Please check your ``formats`` and ``content_types`` on your Serializer." % format)
@@ -252,8 +255,7 @@ class Serializer(object):
         if isinstance(content, six.binary_type):
             content = force_text(content)
 
-        deserialized = method(content)
-        return deserialized
+        return method(content)
 
     def to_simple(self, data, options):
         """
@@ -268,7 +270,7 @@ class Serializer(object):
         
         data_type = type(data)
         
-        stype = STR
+        stype = _STR
         
         for dt in data_type.__mro__:
             try:
@@ -277,24 +279,24 @@ class Serializer(object):
             except KeyError:
                 pass
         
-        if stype == NUM:
+        if stype == _NUM:
             return data
-        if stype == DICT:
+        if stype == _DICT:
             to_simple = self.to_simple
-            return dict((key, to_simple(val, options)) for key, val in six.iteritems(data))
-        if stype == STR:
+            return dict([(key, to_simple(val, options)) for key, val in six.iteritems(data)])
+        if stype == _STR:
             return force_text(data)
-        if stype == LIST:
+        if stype == _LIST:
             to_simple = self.to_simple
             return [to_simple(item, options) for item in data]
-        if stype == BUNDLE:
+        if stype == _BUNDLE:
             to_simple = self.to_simple
-            return dict((key, to_simple(val, options)) for key, val in six.iteritems(data.data))
-        if stype == DATETIME:
+            return dict([(key, to_simple(val, options)) for key, val in six.iteritems(data.data)])
+        if stype == _DATETIME:
             return self.format_datetime(data)
-        if stype == DATE:
+        if stype == _DATE:
             return self.format_date(data)
-        if stype == TIME:
+        if stype == _TIME:
             return self.format_time(data)
 
     def to_etree(self, data, options=None, name=None, depth=0):
