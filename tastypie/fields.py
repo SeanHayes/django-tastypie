@@ -840,23 +840,6 @@ class ToManyField(RelatedField):
                 return []
             raise ApiFieldError("The '%s' field has no data and doesn't allow a null value." % self.instance_name)
 
-        m2m_hydrated = []
-
-        for value in bundle.data.get(self.instance_name):
-            if value is None:
-                continue
-
-            kwargs = {
-                'request': bundle.request,
-            }
-
-            if self.related_name:
-                kwargs['related_obj'] = bundle.obj
-                kwargs['related_bundle'] = bundle
-                kwargs['related_name'] = self.related_name
-
-            m2m_hydrated.append(self.build_related_resource(value, **kwargs))
-        
         kwargs = {
             'request': bundle.request,
         }
@@ -865,13 +848,11 @@ class ToManyField(RelatedField):
             kwargs['related_obj'] = bundle.obj
             kwargs['related_name'] = self.related_name
         
-        m2m_hydrated = [
+        return [
             self.build_related_resource(value, **kwargs)
             for value in bundle.data.get(self.instance_name)
             if value is not None
         ]
-
-        return m2m_hydrated
 
 
 class ManyToManyField(ToManyField):
