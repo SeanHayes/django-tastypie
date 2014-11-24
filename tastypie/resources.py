@@ -1,7 +1,9 @@
 from __future__ import unicode_literals
 from __future__ import with_statement
 from copy import deepcopy
+from functools import reduce
 import logging
+import operator
 import warnings
 
 from django.conf import settings
@@ -10,6 +12,7 @@ from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned, 
 from django.core.urlresolvers import NoReverseMatch, reverse, resolve, Resolver404, get_script_prefix
 from django.core.signals import got_request_exception
 from django.db import transaction
+from django.db.models import Q
 from django.db.models.constants import LOOKUP_SEP
 from django.db.models.sql.constants import QUERY_TERMS
 from django.http import HttpResponse, HttpResponseNotFound, Http404
@@ -708,6 +711,17 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         """
         return filters
 
+    def build_search_filters(self, search, search_fields):
+        """
+        Allows for OR filtering of applicable objects.
+
+        This needs to be implemented at the user level.'
+
+        ``ModelResource`` includes a full working version specific to Django's
+        ``Models``.
+        """
+        return {}
+
     def apply_sorting(self, obj_list, options=None):
         """
         Allows for the sorting of objects being returned.
@@ -1073,7 +1087,7 @@ class Resource(six.with_metaclass(DeclarativeMetaclass)):
         allowed = set(self._meta.list_allowed_methods + self._meta.detail_allowed_methods)
         return 'delete' in allowed
 
-    def apply_filters(self, request, applicable_filters):
+    def apply_filters(self, request, applicable_filters, search_filters=None):
         """
         A hook to alter how the filters are applied to the object list.
 
@@ -1972,6 +1986,22 @@ class BaseModelResource(Resource):
 
         return dict_strip_unicode_keys(qs_filters)
 
+    def build_search_filters(self, search=None, search_fields=None):
+        """
+        Given a dictionary of filters, create the necessary ORM-level filters.
+
+        Keys should be resource fields, **NOT** model fields.
+
+        Valid values are either a list of Django filter types (i.e.
+        ``['startswith', 'exact', 'lte']``), the ``ALL`` constant or the
+        ``ALL_WITH_RELATIONS`` constant.
+        """
+        search_filters = {}
+        if search and search_fields:
+            for f in search_fields:
+                search_filters[f+'__icontains'] = search
+        return self.build_filters(search_filters)
+
     def apply_sorting(self, obj_list, options=None):
         """
         Given a dictionary of options, apply some ORM-level sorting to the
@@ -2029,14 +2059,21 @@ class BaseModelResource(Resource):
 
         return obj_list.order_by(*order_by_args)
 
-    def apply_filters(self, request, applicable_filters):
+    def apply_filters(self, request, applicable_filters, search_filters=None):
         """
         An ORM-specific implementation of ``apply_filters``.
 
         The default simply applies the ``applicable_filters`` as ``**kwargs``,
         but should make it possible to do more advanced things.
         """
-        return self.get_object_list(request).filter(**applicable_filters)
+        objects = self.get_object_list(request).filter(**applicable_filters)
+        
+        qfilter = reduce(operator.or_, [Q(**{f: val}) for f, val in search_filters.items()]) if search_filters else None
+        
+        if qfilter:
+            objects = objects.filter(qfilter)
+        
+        return objects
 
     def get_object_list(self, request):
         """
@@ -2061,10 +2098,18 @@ class BaseModelResource(Resource):
 
         # Update with the provided kwargs.
         filters.update(kwargs)
+        
+        search = filters.pop('search', None)
+        if search:
+            search = search[0]
+        search_fields = filters.pop('search_fields', [])
+        
         applicable_filters = self.build_filters(filters=filters)
+        
+        search_filters = self.build_search_filters(search, search_fields)
 
         try:
-            objects = self.apply_filters(bundle.request, applicable_filters)
+            objects = self.apply_filters(bundle.request, applicable_filters, search_filters)
             return self.authorized_read_list(objects, bundle)
         except ValueError:
             raise BadRequest("Invalid resource lookup data provided (mismatched type).")

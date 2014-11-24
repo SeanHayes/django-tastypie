@@ -1774,6 +1774,21 @@ class ModelResourceTestCase(TestCase):
         resource = NoQuerysetNoteResource()
         self.assertEqual(resource.build_filters(), {})
 
+    def test_build_search_filters(self):
+        resource = NoteResource()
+
+        # Valid none.
+        self.assertEqual(resource.build_search_filters(), {})
+
+        # Not in the filtering dict.
+        self.assertEqual(resource.build_search_filters(search_fields=['resource_url'], search='/foo/bar/'), {})
+
+        # Skipped due to not being recognized.
+        self.assertEqual(resource.build_search_filters(search_fields=['moof'], search='baz'), {})
+
+        # Skipped due to not being recognized.
+        self.assertEqual(resource.build_search_filters(search_fields=['title'], search='news'), {'title__icontains': 'news'})
+
     def test_xss_regressions(self):
         # Make sure the body is JSON & the content-type is right.
         resource = RelatedNoteResource()
@@ -2393,6 +2408,15 @@ class ModelResourceTestCase(TestCase):
                     "updated": "2010-04-01T20:05:00"
                 }
             ])
+
+    def test_get_list_search(self):
+        resource = NoteResource()
+        request = HttpRequest()
+        request.GET = {'format': 'json', 'search': ['post'], 'search_fields': ['title']}
+
+        resp = resource.get_list(request)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content.decode('utf-8'), '{"meta": {"limit": 20, "next": null, "offset": 0, "previous": null, "total_count": 2}, "objects": [{"content": "This is my very first post using my shiny new API. Pretty sweet, huh?", "created": "2010-03-30T20:05:00", "id": 1, "is_active": true, "resource_uri": "/api/v1/notes/1/", "slug": "first-post", "title": "First Post!", "updated": "2010-03-30T20:05:00"}, {"content": "The dog ate my cat today. He looks seriously uncomfortable.", "created": "2010-03-31T20:05:00", "id": 2, "is_active": true, "resource_uri": "/api/v1/notes/2/", "slug": "another-post", "title": "Another Post", "updated": "2010-03-31T20:05:00"}]}')
 
     def test_get_list_use_in(self):
         resource = UseInNoteResource()
